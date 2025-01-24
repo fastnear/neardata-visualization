@@ -53,6 +53,28 @@ async function waitForNextBlock(height) {
 
 export { waitForNextBlock }
 
+// Function to determine shard ID for an account
+function getShardForAccount(accountId) {
+  // Shard boundaries
+  const boundaries = [
+    "aurora",
+    "aurora-0",
+    "game.hot.tg",
+    "kkuuue2akv_1630967379.near",
+    "tge-lockup.sweat"
+  ]
+
+  // Find the first boundary that is greater than the account ID
+  for (let i = 0; i < boundaries.length; i++) {
+    if (accountId < boundaries[i]) {
+      return i
+    }
+  }
+
+  // If account is greater than all boundaries, it goes in the last shard
+  return 5
+}
+
 function processBlockData(block) {
   const shardData = new Array(6).fill(null).map(() => ({
     accounts: new Map(), // account_id -> {receipts: number, transactions: number}
@@ -66,20 +88,25 @@ function processBlockData(block) {
 
     // Process transactions in this shard
     shard.chunk?.transactions?.forEach(tx => {
+      const signerShardId = getShardForAccount(tx.transaction.signer_id)
+      const receiverShardId = getShardForAccount(tx.transaction.receiver_id)
+      
       // Add signer to accounts map
-      const signerCount = shardData[shardId].accounts.get(tx.transaction.signer_id) || { receipts: 0, transactions: 0 }
+      const signerCount = shardData[signerShardId].accounts.get(tx.transaction.signer_id) || { receipts: 0, transactions: 0 }
       signerCount.transactions++
-      shardData[shardId].accounts.set(tx.transaction.signer_id, signerCount)
+      shardData[signerShardId].accounts.set(tx.transaction.signer_id, signerCount)
       
       // Add receiver to accounts map
-      const receiverCount = shardData[shardId].accounts.get(tx.transaction.receiver_id) || { receipts: 0, transactions: 0 }
+      const receiverCount = shardData[receiverShardId].accounts.get(tx.transaction.receiver_id) || { receipts: 0, transactions: 0 }
       receiverCount.transactions++
-      shardData[shardId].accounts.set(tx.transaction.receiver_id, receiverCount)
+      shardData[receiverShardId].accounts.set(tx.transaction.receiver_id, receiverCount)
 
       shardData[shardId].transactions.push({
         hash: tx.transaction.hash,
         signerId: tx.transaction.signer_id,
         receiverId: tx.transaction.receiver_id,
+        signerShardId,
+        receiverShardId,
         gas: tx.outcome.execution_outcome.outcome.gas_burnt,
         tokens: tx.outcome.execution_outcome.outcome.tokens_burnt
       })
@@ -91,20 +118,25 @@ function processBlockData(block) {
         const receiverId = receipt.receiver_id
         const predecessorId = receipt.predecessor_id
         
+        const predecessorShardId = getShardForAccount(predecessorId)
+        const receiverShardId = getShardForAccount(receiverId)
+        
         // Add predecessor to accounts map
-        const predecessorCount = shardData[shardId].accounts.get(predecessorId) || { receipts: 0, transactions: 0 }
+        const predecessorCount = shardData[predecessorShardId].accounts.get(predecessorId) || { receipts: 0, transactions: 0 }
         predecessorCount.transactions++
-        shardData[shardId].accounts.set(predecessorId, predecessorCount)
+        shardData[predecessorShardId].accounts.set(predecessorId, predecessorCount)
         
         // Add receiver to accounts map
-        const currentCount = shardData[shardId].accounts.get(receiverId) || { receipts: 0, transactions: 0 }
+        const currentCount = shardData[receiverShardId].accounts.get(receiverId) || { receipts: 0, transactions: 0 }
         currentCount.receipts++
-        shardData[shardId].accounts.set(receiverId, currentCount)
+        shardData[receiverShardId].accounts.set(receiverId, currentCount)
 
         shardData[shardId].receipts.push({
           id: receipt.receipt_id,
           predecessorId: receipt.predecessor_id,
           receiverId: receipt.receiver_id,
+          predecessorShardId,
+          receiverShardId,
           gas: receipt.receipt.Action.gas || 0
         })
       }
