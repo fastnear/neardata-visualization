@@ -13,6 +13,12 @@ const MAX_ACCOUNT_RADIUS = 20
 const PARTICLE_RADIUS = 3
 const TRANSITION_DURATION = 500
 
+// Visual configuration for transactions and receipts
+const TRANSACTION_COLOR = '#646cff'
+const RECEIPT_COLOR = '#ff6464'
+const PATH_OPACITY = 0.2
+const ANIMATION_DURATION = 1000
+
 // Function to generate consistent angle for an account ID
 function getAccountAngle(accountId) {
   // Simple hash function
@@ -198,6 +204,48 @@ function BlockVisualizer({ data: blockData }) {
     // Store current positions for next update
     prevAccountPositionsRef.current = accountPositions
 
+    // Helper function to animate path and particle
+    function animateTransfer(source, target, color, group, isReceipt = false) {
+      // Create path
+      const path = group.append('path')
+        .attr('class', isReceipt ? 'receipt' : 'transaction')
+        .attr('d', `M${source.x},${source.y} L${target.x},${target.y}`)
+        .attr('stroke', color)
+        .attr('stroke-width', 1)
+        .attr('opacity', 0)
+        .attr('fill', 'none')
+        .transition()
+        .duration(500)
+        .attr('opacity', PATH_OPACITY)
+        .transition()
+        .delay(2000)
+        .duration(1000)
+        .attr('opacity', 0)
+        .remove()
+
+      // Animate particle
+      const particle = group.append('circle')
+        .attr('class', isReceipt ? 'receipt-particle' : 'particle')
+        .attr('r', PARTICLE_RADIUS)
+        .attr('fill', color)
+
+      particle
+        .attr('opacity', 1)
+        .transition()
+        .duration(ANIMATION_DURATION)
+        .ease(d3.easeLinear)
+        .attrTween('transform', () => {
+          const l = path.node().getTotalLength()
+          return t => {
+            const p = path.node().getPointAtLength(t * l)
+            return `translate(${p.x},${p.y})`
+          }
+        })
+        .on('end', () => {
+          particle.remove()
+        })
+    }
+
     // Draw and animate transactions
     data.forEach((shardData, shardId) => {
       shardData.transactions.forEach(tx => {
@@ -205,49 +253,17 @@ function BlockVisualizer({ data: blockData }) {
         const target = accountPositions.get(tx.receiverId)
         
         if (source && target) {
-          // Create path for transaction
-          const path = transactionGroup.append('path')
-            .attr('class', 'transaction')
-            .attr('d', `M${source.x},${source.y} L${target.x},${target.y}`)
-            .attr('stroke', getAccountColor(tx.signerId))
-            .attr('stroke-width', 1)
-            .attr('opacity', 0)
-            .attr('fill', 'none')
-            .transition()
-            .duration(500)
-            .attr('opacity', 0.2)
-            .transition()
-            .delay(2000)
-            .duration(1000)
-            .attr('opacity', 0)
-            .remove()
+          animateTransfer(source, target, TRANSACTION_COLOR, transactionGroup)
+        }
+      })
 
-          // Animate particle along the path
-          const particle = transactionGroup.append('circle')
-            .attr('class', 'particle')
-            .attr('r', PARTICLE_RADIUS)
-            .attr('fill', getAccountColor(tx.signerId))
-
-          // Animation
-          function animateParticle() {
-            particle
-              .attr('opacity', 1)
-              .transition()
-              .duration(1000)
-              .ease(d3.easeLinear)
-              .attrTween('transform', () => {
-                const l = path.node().getTotalLength()
-                return t => {
-                  const p = path.node().getPointAtLength(t * l)
-                  return `translate(${p.x},${p.y})`
-                }
-              })
-              .on('end', () => {
-                particle.remove()
-              })
-          }
-
-          animateParticle()
+      // Draw and animate receipts
+      shardData.receipts.forEach(receipt => {
+        const source = accountPositions.get(receipt.predecessorId)
+        const target = accountPositions.get(receipt.receiverId)
+        
+        if (source && target) {
+          animateTransfer(source, target, RECEIPT_COLOR, transactionGroup, true)
         }
       })
     })

@@ -54,10 +54,6 @@ async function waitForNextBlock(height) {
 export { waitForNextBlock }
 
 function processBlockData(block) {
-  if (!block || !block.shards) {
-    console.error('Invalid block data for processing:', block)
-    return []
-  }
   const shardData = new Array(6).fill(null).map(() => ({
     accounts: new Map(), // account_id -> {receipts: number, transactions: number}
     transactions: [],
@@ -93,21 +89,33 @@ function processBlockData(block) {
     shard.chunk?.receipts?.forEach(receipt => {
       if (receipt.receipt.Action) {
         const receiverId = receipt.receiver_id
-        const currentShard = shardData[shardId]
+        const predecessorId = receipt.predecessor_id
         
-        // Update account receipt count
-        const currentCount = currentShard.accounts.get(receiverId) || { receipts: 0, transactions: 0 }
+        // Add predecessor to accounts map
+        const predecessorCount = shardData[shardId].accounts.get(predecessorId) || { receipts: 0, transactions: 0 }
+        predecessorCount.transactions++
+        shardData[shardId].accounts.set(predecessorId, predecessorCount)
+        
+        // Add receiver to accounts map
+        const currentCount = shardData[shardId].accounts.get(receiverId) || { receipts: 0, transactions: 0 }
         currentCount.receipts++
-        currentShard.accounts.set(receiverId, currentCount)
+        shardData[shardId].accounts.set(receiverId, currentCount)
 
         shardData[shardId].receipts.push({
           id: receipt.receipt_id,
           predecessorId: receipt.predecessor_id,
           receiverId: receipt.receiver_id,
-          gas: receipt.receipt.Action.gas_price || 0
+          gas: receipt.receipt.Action.gas || 0
         })
       }
     })
+  })
+
+  // Debug log
+  console.log('Processed block data:', {
+    accounts: shardData.map(s => Array.from(s.accounts.entries())),
+    transactions: shardData.map(s => s.transactions.length),
+    receipts: shardData.map(s => s.receipts.length)
   })
 
   return shardData
