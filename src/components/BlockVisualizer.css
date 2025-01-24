@@ -26,4 +26,14 @@
 
 .transaction {
   pointer-events: none;
+}
+
+.attribution {
+  opacity: 0.7;
+  font-family: system-ui, -apple-system, sans-serif;
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  font-size: 12px;
+  color: #888;
 } 

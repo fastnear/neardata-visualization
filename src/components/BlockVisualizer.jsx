@@ -3,7 +3,7 @@ import * as d3 from 'd3'
 
 const SHARD_COUNT = 6
 const WIDTH = 1200
-const HEIGHT = 800
+const HEIGHT = 830
 const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
 const RADIUS = 300 // Radius of the circle on which shards are placed
@@ -13,6 +13,31 @@ const MAX_ACCOUNT_RADIUS = 20
 const PARTICLE_RADIUS = 3
 const TRANSITION_DURATION = 500
 
+// Function to generate consistent angle for an account ID
+function getAccountAngle(accountId) {
+  // Simple hash function
+  let hash = 0
+  for (let i = 0; i < accountId.length; i++) {
+    hash = ((hash << 5) - hash) + accountId.charCodeAt(i)
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  // Normalize to [0, 2π]
+  return (Math.abs(hash) % 1000) / 1000 * 2 * Math.PI
+}
+
+// Function to generate consistent color for an account ID
+function getAccountColor(accountId) {
+  // Use similar hash function but for color
+  let hash = 0
+  for (let i = 0; i < accountId.length; i++) {
+    hash = ((hash << 5) - hash) + accountId.charCodeAt(i)
+    hash = hash & hash
+  }
+  // Generate HSL color with consistent hue
+  const hue = BASE_HUE + (Math.abs(hash) % HUE_RANGE)
+  return d3.hsl(hue, 0.8, 0.6).toString()
+}
+
 // Color configuration
 const BASE_HUE = 240 // Base blue hue
 const HUE_RANGE = 60 // How much to vary the hue
@@ -20,6 +45,7 @@ const HUE_RANGE = 60 // How much to vary the hue
 function BlockVisualizer({ data: blockData }) {
   const svgRef = useRef(null)
   const prevGroupRef = useRef(null)
+  const prevAccountPositionsRef = useRef(new Map())
   
   useEffect(() => {
     if (!svgRef.current || !blockData) return
@@ -38,6 +64,19 @@ function BlockVisualizer({ data: blockData }) {
         .duration(TRANSITION_DURATION)
         .style('opacity', 0)
         .remove()
+    }
+
+    // Create a map of all accounts in the current block
+    const currentAccounts = new Set()
+    data.forEach(shardData => {
+      Array.from(shardData.accounts.keys()).forEach(account => currentAccounts.add(account))
+    })
+
+    // Clean up positions for accounts that no longer exist
+    for (const [accountId] of prevAccountPositionsRef.current) {
+      if (!currentAccounts.has(accountId)) {
+        prevAccountPositionsRef.current.delete(accountId)
+      }
     }
 
     // Create new container for this block's visualization
@@ -66,19 +105,6 @@ function BlockVisualizer({ data: blockData }) {
     // Store account positions for transaction animations
     const accountPositions = new Map()
 
-    // Collect all unique accounts across all shards
-    const allAccounts = new Set()
-    data.forEach(shardData => {
-      Array.from(shardData.accounts.keys()).forEach(account => allAccounts.add(account))
-    })
-
-    // Create color scale for accounts
-    const colorScale = d3.scaleOrdinal()
-      .domain(Array.from(allAccounts))
-      .range(d3.range(HUE_RANGE).map(h => 
-        d3.hsl(BASE_HUE + h, 0.8, 0.6).toString()
-      ))
-
     // Draw shard containers
     const shards = shardGroup.selectAll('.shard-group')
       .data(shardPositions)
@@ -98,8 +124,22 @@ function BlockVisualizer({ data: blockData }) {
     // Add shard labels
     shards.append('text')
       .attr('class', 'shard-label')
-      .attr('y', -SHARD_RADIUS - 20)
-      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em') // Vertically center text
+      .attr('y', d => {
+        const isTop = d.id === 0
+        const isBottom = d.id === 3
+        return isTop ? -SHARD_RADIUS - 20 : isBottom ? SHARD_RADIUS + 20 : 0
+      })
+      .attr('x', d => {
+        const isLeft = d.id === 1 || d.id === 2
+        const isRight = d.id === 4 || d.id === 5
+        return isLeft ? -SHARD_RADIUS - 20 : isRight ? SHARD_RADIUS + 20 : 0
+      })
+      .attr('text-anchor', d => {
+        const isLeft = d.id === 1 || d.id === 2
+        const isRight = d.id === 4 || d.id === 5
+        return isLeft ? 'end' : isRight ? 'start' : 'middle'
+      })
       .text(d => `Shard ${d.id}`)
       .attr('fill', '#888')
 
@@ -108,11 +148,14 @@ function BlockVisualizer({ data: blockData }) {
       const shardData = data[shardId]
       if (!shardData) return
 
+      // Get existing accounts in this shard
+      const accountsInShard = Array.from(shardData.accounts.keys())
+
       // Calculate positions for account circles within shard
-      const accountPositionsInShard = Array.from(shardData.accounts.entries()).map(([accountId, count], i) => {
-        const angleStep = (2 * Math.PI) / shardData.accounts.size
+      const accountPositionsInShard = accountsInShard.map(accountId => {
+        const count = shardData.accounts.get(accountId)
         const innerRadius = SHARD_RADIUS * 0.6 // Leave some padding inside shard
-        const angle = i * angleStep
+        const angle = getAccountAngle(accountId)
         const x = Math.cos(angle) * innerRadius
         const y = Math.sin(angle) * innerRadius
         
@@ -120,7 +163,8 @@ function BlockVisualizer({ data: blockData }) {
         accountPositions.set(accountId, {
           x: x + shardPos.x,
           y: y + shardPos.y,
-          shardId
+          shardId,
+          angle
         })
 
         return {
@@ -130,8 +174,7 @@ function BlockVisualizer({ data: blockData }) {
           x,
           y,
           radius: d3.scaleLinear()
-            .domain([0, Math.max(1, ...Array.from(shardData.accounts.values(), v => (v?.receipts || 0)))]
-            )
+            .domain([0, Math.max(1, ...Array.from(shardData.accounts.values(), v => (v?.receipts || 0)))])
             .range([MIN_ACCOUNT_RADIUS, MAX_ACCOUNT_RADIUS])(count?.receipts || 0)
         }
       })
@@ -146,11 +189,14 @@ function BlockVisualizer({ data: blockData }) {
         .attr('cx', d => d.x)
         .attr('cy', d => d.y)
         .attr('r', d => d.radius)
-        .attr('fill', d => colorScale(d.id))
+        .attr('fill', d => getAccountColor(d.id))
         .attr('opacity', 0.6)
-        .append('title') // Add tooltip
+        .append('title')
         .text(d => `${d.id}\nReceipts: ${d.receipts}\nTransactions: ${d.transactions}`)
     })
+
+    // Store current positions for next update
+    prevAccountPositionsRef.current = accountPositions
 
     // Draw and animate transactions
     data.forEach((shardData, shardId) => {
@@ -163,7 +209,7 @@ function BlockVisualizer({ data: blockData }) {
           const path = transactionGroup.append('path')
             .attr('class', 'transaction')
             .attr('d', `M${source.x},${source.y} L${target.x},${target.y}`)
-            .attr('stroke', colorScale(tx.signerId))
+            .attr('stroke', getAccountColor(tx.signerId))
             .attr('stroke-width', 1)
             .attr('opacity', 0)
             .attr('fill', 'none')
@@ -180,7 +226,7 @@ function BlockVisualizer({ data: blockData }) {
           const particle = transactionGroup.append('circle')
             .attr('class', 'particle')
             .attr('r', PARTICLE_RADIUS)
-            .attr('fill', colorScale(tx.signerId))
+            .attr('fill', getAccountColor(tx.signerId))
 
           // Animation
           function animateParticle() {
@@ -220,6 +266,9 @@ function BlockVisualizer({ data: blockData }) {
   return (
     <div className="block-visualizer">
       <svg ref={svgRef}></svg>
+      <div className="attribution">
+        Powered by FastNear
+      </div>
     </div>
   )
 }
