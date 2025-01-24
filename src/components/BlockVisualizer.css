@@ -1,0 +1,29 @@
+.block-visualizer {
+  width: 100%;
+  height: 100%;
+  background: #13131a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.block-visualizer svg {
+  width: 100%;
+  height: 100%;
+}
+
+.account {
+  transition: all 0.3s ease;
+}
+
+.account:hover {
+  opacity: 1;
+  filter: brightness(1.2);
+}
+
+.particle {
+  filter: drop-shadow(0 0 2px #646cff);
+}
+
+.transaction {
+  pointer-events: none;
+} 
