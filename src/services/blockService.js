@@ -98,7 +98,7 @@ function processBlockData(block) {
       
       // Add receiver to accounts map
       const receiverCount = shardData[receiverShardId].accounts.get(tx.transaction.receiver_id) || { receipts: 0, transactions: 0 }
-      receiverCount.transactions++
+      receiverCount.receipts++
       shardData[receiverShardId].accounts.set(tx.transaction.receiver_id, receiverCount)
 
       shardData[shardId].transactions.push({

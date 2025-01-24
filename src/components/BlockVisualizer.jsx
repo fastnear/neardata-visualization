@@ -283,7 +283,7 @@ function BlockVisualizer({ data: blockData }) {
     <div className="block-visualizer">
       <svg ref={svgRef}></svg>
       <div className="attribution">
-        Powered by FastNear
+        Powered by <a href="https://fastnear.com" target="_blank" rel="noopener noreferrer">FastNear</a>
       </div>
     </div>
   )
