@@ -11,30 +11,45 @@ const SHARD_RADIUS = 80
 const MIN_ACCOUNT_RADIUS = 5
 const MAX_ACCOUNT_RADIUS = 20
 const PARTICLE_RADIUS = 3
+const TRANSITION_DURATION = 500
 
 // Color configuration
 const BASE_HUE = 240 // Base blue hue
 const HUE_RANGE = 60 // How much to vary the hue
 
-function BlockVisualizer({ data }) {
+function BlockVisualizer({ data: blockData }) {
   const svgRef = useRef(null)
+  const prevGroupRef = useRef(null)
   
   useEffect(() => {
-    if (!svgRef.current || !data) return
+    if (!svgRef.current || !blockData) return
+
+    const data = Array.isArray(blockData) ? blockData : blockData.shardData
+    if (!data) return
 
     const svg = d3.select(svgRef.current)
       .attr('width', WIDTH)
       .attr('height', HEIGHT)
 
-    // Clear previous content
-    svg.selectAll('*').remove()
+    // If there's a previous visualization, start fading it out
+    if (prevGroupRef.current) {
+      d3.select(prevGroupRef.current)
+        .transition()
+        .duration(TRANSITION_DURATION)
+        .style('opacity', 0)
+        .remove()
+    }
+
+    // Create new container for this block's visualization
+    const blockGroup = svg.append('g')
+      .style('opacity', 0)
 
     // Create container for transactions
-    const transactionGroup = svg.append('g')
+    const transactionGroup = blockGroup.append('g')
       .attr('transform', `translate(${CENTER_X}, ${CENTER_Y})`)
 
     // Create shard containers
-    const shardGroup = svg.append('g')
+    const shardGroup = blockGroup.append('g')
       .attr('transform', `translate(${CENTER_X}, ${CENTER_Y})`)
 
     // Calculate shard positions
@@ -150,8 +165,16 @@ function BlockVisualizer({ data }) {
             .attr('d', `M${source.x},${source.y} L${target.x},${target.y}`)
             .attr('stroke', colorScale(tx.signerId))
             .attr('stroke-width', 1)
-            .attr('opacity', 0.2)
+            .attr('opacity', 0)
             .attr('fill', 'none')
+            .transition()
+            .duration(500)
+            .attr('opacity', 0.2)
+            .transition()
+            .delay(2000)
+            .duration(1000)
+            .attr('opacity', 0)
+            .remove()
 
           // Animate particle along the path
           const particle = transactionGroup.append('circle')
@@ -175,7 +198,6 @@ function BlockVisualizer({ data }) {
               })
               .on('end', () => {
                 particle.remove()
-                path.remove()
               })
           }
 
@@ -184,7 +206,16 @@ function BlockVisualizer({ data }) {
       })
     })
 
-  }, [data])
+    // Fade in the new visualization
+    blockGroup
+      .transition()
+      .duration(TRANSITION_DURATION)
+      .style('opacity', 1)
+
+    // Store this group as the previous one for next update
+    prevGroupRef.current = blockGroup.node()
+
+  }, [blockData])
 
   return (
     <div className="block-visualizer">

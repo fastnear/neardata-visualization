@@ -60,3 +60,11 @@ button {
 button:hover {
   background-color: #7c82ff;
 }
+
+button.active {
+  background-color: #ff4646;
+}
+
+button.active:hover {
+  background-color: #ff6b6b;
+}

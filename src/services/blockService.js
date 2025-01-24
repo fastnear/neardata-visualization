@@ -1,17 +1,63 @@
-const BLOCK_API = 'https://mainnet.neardata.xyz/v0/last_block/final'
+const BASE_API = 'https://mainnet.neardata.xyz/v0'
 
-export async function fetchLatestBlock() {
+export async function fetchLatestFinalBlock() {
   try {
-    const response = await fetch(BLOCK_API)
+    const response = await fetch(`${BASE_API}/last_block/final`)
     const data = await response.json()
-    return processBlockData(data)
+    console.log('Raw block data:', data)
+    if (!data || !data.block) {
+      console.error('Invalid block data structure:', data)
+      return null
+    }
+    return { 
+      block: data, 
+      shardData: processBlockData(data)
+    }
   } catch (error) {
-    console.error('Error fetching block data:', error)
+    console.error('Error fetching latest block:', error)
     return null
   }
 }
 
+export async function fetchBlockByHeight(height) {
+  try {
+    const response = await fetch(`${BASE_API}/block/${height}`)
+    const data = await response.json()
+    if (!data) return null
+    if (!data.block) {
+      console.error('Invalid block data structure:', data)
+      return null
+    }
+    return { 
+      block: data, 
+      shardData: processBlockData(data)
+    }
+  } catch (error) {
+    console.error('Error fetching block by height:', error)
+    return null
+  }
+}
+
+async function waitForNextBlock(height) {
+  try {
+    while (true) {
+      const data = await fetchBlockByHeight(height)
+      if (data) return data
+      await new Promise(resolve => setTimeout(resolve, 200)) // Wait 200ms before trying again
+    }
+  } catch (error) {
+    console.error('Error waiting for next block:', error)
+    return null
+  }
+}
+
+export { waitForNextBlock }
+
 function processBlockData(block) {
+  if (!block || !block.shards) {
+    console.error('Invalid block data for processing:', block)
+    return []
+  }
   const shardData = new Array(6).fill(null).map(() => ({
     accounts: new Map(), // account_id -> {receipts: number, transactions: number}
     transactions: [],
