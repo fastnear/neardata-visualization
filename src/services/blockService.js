@@ -76,6 +76,11 @@ export const shardIdMap = [0,
   5
 ];
 
+const inverseMap = shardIdMap.reduce((acc, shardId, index) => {
+  acc[shardId] = index
+  return acc
+}, {});
+
 // Function to determine shard ID for an account
 function getShardForAccount(accountId) {
 
@@ -100,7 +105,7 @@ function processBlockData(block) {
 
   // Process transactions
   block.shards.forEach(shard => {
-    const shardId = shard.shard_id
+    const shardId = inverseMap[shard.shard_id];
 
     // Process transactions in this shard
     shard.chunk?.transactions?.forEach(tx => {
