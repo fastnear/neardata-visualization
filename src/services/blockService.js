@@ -1,3 +1,5 @@
+import {SHARD_COUNT} from "../components/BlockVisualizer.jsx";
+
 const BASE_API = 'https://mainnet.neardata.xyz/v0'
 
 export async function fetchLatestFinalBlock() {
@@ -9,8 +11,8 @@ export async function fetchLatestFinalBlock() {
       console.error('Invalid block data structure:', data)
       return null
     }
-    return { 
-      block: data, 
+    return {
+      block: data,
       shardData: processBlockData(data)
     }
   } catch (error) {
@@ -28,8 +30,8 @@ export async function fetchBlockByHeight(height) {
       console.error('Invalid block data structure:', data)
       return null
     }
-    return { 
-      block: data, 
+    return {
+      block: data,
       shardData: processBlockData(data)
     }
   } catch (error) {
@@ -53,30 +55,44 @@ async function waitForNextBlock(height) {
 
 export { waitForNextBlock }
 
+// Shard boundaries
+export const boundaries = [
+  "aurora",
+  "aurora-0",
+  "earn.kaiching",
+  "game.hot.tg",
+  "game.hot.tg-0",
+  "kkuuue2akv_1630967379.near",
+  "tge-lockup.sweat"
+];
+
+export const shardIdMap = [0,
+  1,
+  8,
+  9,
+  6,
+  7,
+  4,
+  5
+];
+
 // Function to determine shard ID for an account
 function getShardForAccount(accountId) {
-  // Shard boundaries
-  const boundaries = [
-    "aurora",
-    "aurora-0",
-    "game.hot.tg",
-    "kkuuue2akv_1630967379.near",
-    "tge-lockup.sweat"
-  ]
+
 
   // Find the first boundary that is greater than the account ID
   for (let i = 0; i < boundaries.length; i++) {
     if (accountId < boundaries[i]) {
-      return i
+      return i;
     }
   }
 
   // If account is greater than all boundaries, it goes in the last shard
-  return 5
+  return boundaries.length;
 }
 
 function processBlockData(block) {
-  const shardData = new Array(6).fill(null).map(() => ({
+  const shardData = new Array(SHARD_COUNT).fill(null).map(() => ({
     accounts: new Map(), // account_id -> {receipts: number, transactions: number}
     transactions: [],
     receipts: []
@@ -90,12 +106,12 @@ function processBlockData(block) {
     shard.chunk?.transactions?.forEach(tx => {
       const signerShardId = getShardForAccount(tx.transaction.signer_id)
       const receiverShardId = getShardForAccount(tx.transaction.receiver_id)
-      
+
       // Add signer to accounts map
       const signerCount = shardData[signerShardId].accounts.get(tx.transaction.signer_id) || { receipts: 0, transactions: 0 }
       signerCount.transactions++
       shardData[signerShardId].accounts.set(tx.transaction.signer_id, signerCount)
-      
+
       // Add receiver to accounts map
       const receiverCount = shardData[receiverShardId].accounts.get(tx.transaction.receiver_id) || { receipts: 0, transactions: 0 }
       receiverCount.receipts++
@@ -117,15 +133,15 @@ function processBlockData(block) {
       if (receipt.receipt.Action) {
         const receiverId = receipt.receiver_id
         const predecessorId = receipt.predecessor_id
-        
+
         const predecessorShardId = getShardForAccount(predecessorId)
         const receiverShardId = getShardForAccount(receiverId)
-        
+
         // Add predecessor to accounts map
         const predecessorCount = shardData[predecessorShardId].accounts.get(predecessorId) || { receipts: 0, transactions: 0 }
         predecessorCount.transactions++
         shardData[predecessorShardId].accounts.set(predecessorId, predecessorCount)
-        
+
         // Add receiver to accounts map
         const currentCount = shardData[receiverShardId].accounts.get(receiverId) || { receipts: 0, transactions: 0 }
         currentCount.receipts++
@@ -151,4 +167,4 @@ function processBlockData(block) {
   })
 
   return shardData
-} 
+}

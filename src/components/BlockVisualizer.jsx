@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import * as d3 from 'd3'
+import {shardIdMap} from "../services/blockService.js";
 
-const SHARD_COUNT = 6
+export const SHARD_COUNT = shardIdMap.length;
 const WIDTH = 1200
 const HEIGHT = 830
 const CENTER_X = WIDTH / 2
@@ -52,7 +53,7 @@ function BlockVisualizer({ data: blockData }) {
   const svgRef = useRef(null)
   const prevGroupRef = useRef(null)
   const prevAccountPositionsRef = useRef(new Map())
-  
+
   useEffect(() => {
     if (!svgRef.current || !blockData) return
 
@@ -146,7 +147,7 @@ function BlockVisualizer({ data: blockData }) {
         const isRight = d.id === 4 || d.id === 5
         return isLeft ? 'end' : isRight ? 'start' : 'middle'
       })
-      .text(d => `Shard ${d.id}`)
+      .text(d => `Shard ${shardIdMap[d.id]}`)
       .attr('fill', '#888')
 
     // Process and add account circles for each shard
@@ -164,7 +165,7 @@ function BlockVisualizer({ data: blockData }) {
         const angle = getAccountAngle(accountId)
         const x = Math.cos(angle) * innerRadius
         const y = Math.sin(angle) * innerRadius
-        
+
         // Store global position for this account
         accountPositions.set(accountId, {
           x: x + shardPos.x,
@@ -251,7 +252,7 @@ function BlockVisualizer({ data: blockData }) {
       shardData.transactions.forEach(tx => {
         const source = accountPositions.get(tx.signerId)
         const target = accountPositions.get(tx.receiverId)
-        
+
         if (source && target) {
           animateTransfer(source, target, TRANSACTION_COLOR, transactionGroup)
         }
@@ -261,7 +262,7 @@ function BlockVisualizer({ data: blockData }) {
       shardData.receipts.forEach(receipt => {
         const source = accountPositions.get(receipt.predecessorId)
         const target = accountPositions.get(receipt.receiverId)
-        
+
         if (source && target) {
           animateTransfer(source, target, RECEIPT_COLOR, transactionGroup, true)
         }
@@ -289,4 +290,4 @@ function BlockVisualizer({ data: blockData }) {
   )
 }
 
-export default BlockVisualizer 
+export default BlockVisualizer
