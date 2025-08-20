@@ -57,6 +57,7 @@ export { waitForNextBlock }
 
 // Shard boundaries
 export const boundaries = [
+  "650",
   "aurora",
   "aurora-0",
   "earn.kaiching",
@@ -66,7 +67,9 @@ export const boundaries = [
   "tge-lockup.sweat"
 ];
 
-export const shardIdMap = [0,
+export const shardIdMap = [
+  10,
+  11,
   1,
   8,
   9,
